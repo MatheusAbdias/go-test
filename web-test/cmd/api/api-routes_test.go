@@ -8,15 +8,19 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func Test_application_routes(t *testing.T) {
+func Test_app_routes(t *testing.T) {
 	var registered = []struct{
 		route string
 		method string
 	}{
-		{"/", "GET"},
-		{"/login", "POST"},
-		{"/user/profile", "GET"},
-		{"/static/*", "GET"},
+		{"/auth", "POST"},
+		{"/refresh-token", "POST"},
+		{"/users/", "GET"},
+		{"/users/{userID}", "GET"},
+		{"/users/{userID}", "DELETE"},
+		{"/users/", "PATCH"},
+		{"/users/", "PUT"},
+		
 	}
 
 	mux := app.routes()

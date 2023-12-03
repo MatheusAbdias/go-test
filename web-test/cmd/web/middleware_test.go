@@ -6,109 +6,105 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-
 	"webapp/pkg/data"
 )
 
 func Test_application_addIPToContext(t *testing.T) {
-	testCases := []struct {
-		headerName  string
+	tests := []struct{
+		headerName string
 		headerValue string
-		addr        string
-		emptyAddr   bool
+		addr string
+		emptyAddr bool
 	}{
 		{"", "", "", false},
 		{"", "", "", true},
 		{"X-Forwarded-For", "192.3.2.1", "", false},
 		{"", "", "hello:world", false},
 	}
-	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		value := r.Context().Value(contextUserKey)
-		if value == nil {
+
+	// create a dummy handler that we'll use to check the context
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request){
+		// make sure that the value exists in the context
+		val := r.Context().Value(contextUserKey)
+		if val == nil {
 			t.Error(contextUserKey, "not present")
 		}
 
-		ip, ok := value.(string)
+		// make sure we got a string back
+		ip, ok := val.(string)
 		if !ok {
 			t.Error("not string")
 		}
 		t.Log(ip)
 	})
 
-	for _, testCase := range testCases {
-		handleToTest := app.addIPToContext(nextHandler)
+	for _, e := range tests {
+		// create the handler to test
+		handlerToTest := app.addIPToContext(nextHandler)
 
-		request := httptest.NewRequest("GET", "http://testing", nil)
+		req := httptest.NewRequest("GET", "http://testing", nil)
 
-		if testCase.emptyAddr {
-			request.RemoteAddr = ""
+		if e.emptyAddr {
+			req.RemoteAddr = ""
 		}
 
-		if len(testCase.headerName) > 0 {
-			request.Header.Add(testCase.headerName, testCase.headerValue)
+		if len(e.headerName) > 0 {
+			req.Header.Add(e.headerName, e.headerValue)
 		}
 
-		if len(testCase.addr) > 0 {
-			request.RemoteAddr = testCase.addr
+		if len(e.addr) > 0 {
+			req.RemoteAddr = e.addr
 		}
 
-		handleToTest.ServeHTTP(httptest.NewRecorder(), request)
+		handlerToTest.ServeHTTP(httptest.NewRecorder(), req)
 	}
 }
 
 func Test_application_ipFromContext(t *testing.T) {
-	testCases := []struct {
-		headerValue string
-	}{
-		{"192.3.2.1"},
-		{"fool"},
+	// get a context
+	ctx := context.Background()
+
+	// put something in the context
+	ctx = context.WithValue(ctx, contextUserKey, "whatever")
+
+	// call the function
+	ip := app.ipFromContext(ctx)
+
+	// perform the test
+	if !strings.EqualFold("whatever", ip) {
+		t.Error("wrong value returned from context")
 	}
-	var ctx context.Context
-
-	for _, testCase := range testCases {
-		ctx = context.WithValue(context.Background(), contextUserKey, testCase.headerValue)
-		ip := app.ipFromContext(ctx)
-
-		if !strings.EqualFold(ip, testCase.headerValue) {
-			t.Errorf("Expected:%s, but got:%s", testCase.headerValue, ip)
-		}
-	}
-
 }
 
 func Test_app_auth(t *testing.T) {
-	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request){
 
-	testCases := []struct {
-		name   string
+	})
+
+	var tests = []struct{
+		name string
 		isAuth bool
 	}{
 		{"logged in", true},
-		{"not legged in", false},
+		{"not logged in", false},
 	}
-	for _, testCase := range testCases {
+
+	for _, e := range tests {
 		handlerToTest := app.auth(nextHandler)
-		request := httptest.NewRequest("GET", "http://testing", nil)
-		request = addContextAndSessionToRequest(request, app)
-		if testCase.isAuth {
-			app.Session.Put(request.Context(), "user", data.User{ID: 1})
+		req := httptest.NewRequest("GET", "http://testing", nil)
+		req = addContextAndSessionToRequest(req, app)
+		if e.isAuth {
+			app.Session.Put(req.Context(), "user", data.User{ID: 1})
+		}
+		rr := httptest.NewRecorder()
+		handlerToTest.ServeHTTP(rr, req)
+
+		if e.isAuth && rr.Code != http.StatusOK {
+			t.Errorf("%s: expected status code of 200 but got %d", e.name, rr.Code)
 		}
 
-		recorder := httptest.NewRecorder()
-		handlerToTest.ServeHTTP(recorder, request)
-
-		if testCase.isAuth && recorder.Code != http.StatusOK {
-			t.Errorf("%s: expected status code 200 but got %d", testCase.name, recorder.Code)
-		}
-
-		if !testCase.isAuth && recorder.Code != http.StatusTemporaryRedirect {
-			t.Errorf(
-				"%s: expected status code %d but got %d",
-				testCase.name,
-				http.StatusTemporaryRedirect,
-				recorder.Code,
-			)
+		if !e.isAuth && rr.Code != http.StatusTemporaryRedirect {
+			t.Errorf("%s: expected status code 307, but got %d", e.name, rr.Code)
 		}
 	}
-
 }

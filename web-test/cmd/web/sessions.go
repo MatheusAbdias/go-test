@@ -4,8 +4,9 @@ import (
 	"net/http"
 	"time"
 
-	scs "github.com/alexedwards/scs/v2"
+	"github.com/alexedwards/scs/v2"
 )
+
 
 func getSession() *scs.SessionManager {
 	session := scs.New()
